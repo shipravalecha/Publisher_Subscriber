@@ -1,37 +1,55 @@
+"""
+bellamn_ford.py
+CPSC 5520, Seattle University
+This is the bellamn_ford algorithm that detects the negative cycle in the graph. It takes source currency as input
+and runs the bellman ford algorithm. It takes the source currency, destination currency and weights from the lab3 and
+creates the edges for the graph.
+:Authors: Fnu Shipra
+:Version: 0.0
+"""
+
 from time import time
 class Graph:
- 
+    
+    """
+    Init method is used to initialize the variables, dictionaries, lists that are used in the program.
+    """
     def __init__(self):
-        self.V = 0 # No. of vertices
-        self.graph = []
-        self.verticesSet = set([])
-        self.weight_dict = {}   
-        self.timestamp_dict = {} 
-        self.parent_dict = {} 
-    # function to add an edge to graph
-    def addEdge(self, u, v, w, timestamp):
+        self.V = 0                                                                  # No. of vertices
+        self.graph = []                                                             # Graph dictionary
+        self.verticesSet = set([])                                                  # vertices set to determine the number of iterations of the graph
+        self.weight_dict = {}                                                       # dictionary to store weights
+        self.timestamp_dict = {}                                                    # dictionary to store timestamps
+        self.parent_dict = {}                                                       # dictionary to store parents of nodes
+        self.exchange_dict = {}                                                     # dictionary to store exchange rates
+    
+    """
+    This method is used to add the edges in the graph by taking source currency, 
+    destination currency and weights as inputs
+    """
+    def addEdge(self, u, v, w, timestamp, rate):
         
-        self.weight_dict[(u,v)] = w
-        # add reverse edge with negative log
-        self.weight_dict[(v, u)] = -w
-        #update tiemstamps
-        self.timestamp_dict[(u, v)] = timestamp
+        self.weight_dict[(u,v)] = w                                                 # add the edge with log value i.e. w = log(rate)
+        self.weight_dict[(v, u)] = -w                                               # add the reverse edge with negative log i.e. w = -log(rate)
+        self.timestamp_dict[(u, v)] = timestamp                                     # update tiemstamps
         self.timestamp_dict[(v, u)] = timestamp
-        
+        self.exchange_dict[(u, v)]  = rate                                          # update exchange rates u -> v = rate
+        self.exchange_dict[(v, u)]  = 1 / rate                                      # update exchange rates v -> u = 1/rate
         edges = []
-        current_timestamp = time()*1000
-        staled_quotes = []
+        current_timestamp = time() * 1000
+        staled_quotes = []                                                          # list to keep track of staled records 
+
         for key in self.weight_dict:
-            val = self.weight_dict[key]
+            weight = self.weight_dict[key]
             timestamp = self.timestamp_dict[key]
-            # append only edges which are seen in the last 1.5 seconds
-            if current_timestamp - timestamp <=1500:
-                edges.append((key[0], key[1], val))
-            else:
+
+            if current_timestamp - timestamp <= 1500:                               # append only edges which are seen in the last 1.5 seconds
+                edges.append((key[0], key[1], weight))
+            else:                                                                   # else discard the stale records
                 staled_quotes.append(key)
-                print(f"Discarding scale quote: {key[0]} -> {key[1]} at timestamp {timestamp} for current timestamp {current_timestamp}")
-        
-        for quote in staled_quotes:
+                print(f"Discarding scale quote: {key[0]} -> {key[1]}")
+
+        for quote in staled_quotes:                                                 # remove staled records from  dictionaries as well
             self.weight_dict.pop(quote, None)
             self.timestamp_dict.pop(quote, None)
 
@@ -39,84 +57,57 @@ class Graph:
         self.verticesSet.add(u)
         self.verticesSet.add(v)
         self.V = len(self.verticesSet)
-    # utility function used to print the solution
-    def printArr(self, dist):
-        print("Vertex Distance from Source")
-        for i in self.verticesSet:
-            print("{0}\t\t{1}".format(i, dist[i]))
+    
+    """
+    This is the method that runs the bellamn ford algorithm to find the shortest distance from source node 
+    to all other nodes. This method also detects the negative cycle. 
+    """
+    def BellmanFord(self, src, tolerance=0.01):                    # used the tolerance of around 0.01
  
-    # The main function that finds shortest distances from src to
-    # all other vertices using Bellman-Ford algorithm. The function
-    # also detects negative weight cycle
-    def BellmanFord(self, src, tolerance=0.0007):
- 
-        # Step 1: Initialize distances from src to all other vertices
-        # as INFINITE
         dist = {}
         sequence = []
-        for i in self.verticesSet:
+        for i in self.verticesSet:                                 # Initialize distances from src to all other vertices as infinity
             dist[i] = float("Inf")
         dist[src] = 0
  
-        # Step 2: Relax all edges |V| - 1 times. A simple shortest
+        # Relax all edges |V| - 1 times. A simple shortest
         # path from src to any other vertex can have at-most |V| - 1
         # edges
-        for _ in range(self.V - 1):
-            # Update dist value and parent index of the adjacent vertices of
-            # the picked vertex. Consider only those vertices which are still in
-            # queue
+        for _ in range(self.V - 1):                                # update the distance of the source vertex i.e. u as per the relaxation condition. Also update the paren node
             for u, v, w in self.graph:
-                if dist[u] != float("Inf") and dist[u] + w < dist[v]:
+                if dist[u] != float("Inf") and dist[u] + w < dist[v] :
                     sequence.append((u, v, w))
                     dist[v] = dist[u] + w
                     self.parent_dict[v] = u
-        # Step 3: check for negative-weight cycles. The above step
-        # guarantees shortest distances if graph doesn't contain
-        # negative weight cycle. If we get a shorter path, then there
-        # is a cycle.
+        
+        # Check for negative-weight cycles. The above step guarantees shortest distances if graph doesn't contain
+        # negative weight cycle. If in this iteration the weight changes,then there is a negative weight cycle.
         for u, v, w in self.graph:
-            if dist[u] != float("Inf") and dist[u] + w < dist[v]:
+            if dist[u] != float("Inf") and dist[u] + w < dist[v] and abs(dist[v] - (dist[u] + w)) > tolerance:
                 print("ARBITRAGE")
                 self.printCycle(v, u)
                 return
-        # print all distance
-        self.printArr(dist)
-    def printCycle(self, v, u):
 
+    """
+    This method prints the negative cycle with the format as source currency, destination currency and their exhange rates
+    """
+    def printCycle(self, v, u):
         start = u
         res = [v]
-        print("Printing cycle")
         while True:
             if start in res:
                 res.append(start)
                 break
             res.append(start)
             start = self.parent_dict[start]
-        for i in range(1, len(res)):
+        start_currency = 100
+        print(f"starting with  : {start_currency} {res[len(res) - 1]}")
+
+        for i in range(len(res) - 1, 0, -1):
             u = res[i]
             v = res[i - 1]
             key = (u, v)
-            print(key)
-            print(self.weight_dict[key])
-            print(f"{res[i - 1]} -> ")
-
-
-
-    
-    
-# Driver's code
-if __name__ == '__main__':
-    g = Graph(5)
-    g.addEdge(0, 1, -1)
-    g.addEdge(2, 0, -4)
-    g.addEdge(1, 2, 3)
-    g.addEdge(1, 3, 2)
-    g.addEdge(1, 4, 2)
-    g.addEdge(3, 2, 5)
-    g.addEdge(3, 1, 1)
-    g.addEdge(4, 3, -3)
-    g.addEdge(2, 4, -1)
-    print('in bellaman')
- 
-    # function call
-    g.BellmanFord(0)
+            exchange_rate =  self.exchange_dict[key]
+            print(f"Exchanged {u} -> {v} at rate {exchange_rate}")
+            print(f"current currency: {start_currency * exchange_rate} {v}")
+            start_currency = start_currency * exchange_rate
